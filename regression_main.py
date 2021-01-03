@@ -147,9 +147,7 @@ def gen_data(n,K):
 	return Xs
 
 def calculate_loss(examples, thresh):
-	# need to caculate average label for class0, class1
-	# use indexing and argwhere
-	print("threshold: ", thresh)
+	#print("threshold: ", thresh)
 	K = len(examples[0])-1
 	class0_idxs = np.argwhere(examples[:,K] < thresh)
 	class0_idxs = [idx[0] for idx in class0_idxs]
@@ -166,21 +164,21 @@ def calculate_loss(examples, thresh):
 	if len(ex_class0) == 0:
 		array1 = ex_class1[:,K] - label1
 		loss = np.sum(array1**2)
-		print("loss: ", loss)
+		#print("loss: ", loss)
 		#pdb.set_trace()
 		return loss, 0, label1
 	if len(ex_class1) == 0:
 		array0 = ex_class0[:,K] - label0
 		loss = np.sum(array0**2)
-		print("loss: ", loss)
+		#print("loss: ", loss)
 		#pdb.set_trace()
 		return loss, label0, 0
 
 	array0 = ex_class0[:,K] - label0
 	array1 = ex_class1[:,K] - label1
 	loss = np.sum(array0**2) + np.sum(array1**2)
-	print("loss: ", loss)
-	assert(1==0)
+	#print("loss: ", loss)
+	#assert(1==0)
 	#pdb.set_trace()
 	return loss, label0, label1
 
@@ -198,6 +196,9 @@ def search_possible_splits(examples, attribute):
 	#print(losses)
 	#print("\n")
 	losses = sorted(losses, key=lambda x:(-x[0], x[1], x[2], x[3]))
+	if len(losses) == 0:
+		pdb.set_trace()
+		return (-1,-1,-1,-1)
 	# return the best split
 	#pdb.set_trace()
 	return losses[0]
@@ -213,7 +214,16 @@ attributes is the set of indices into X in examples
  # def __init__(self, attr_test, attr, val):
 def dt_learning(examples, attributes, p_examples, delta):
 	if len(examples) == 0:
-		return plural_value(p_examples) # Fix this
+		K = len(p_examples[0])-1
+		return RegressionDecisionTree(lambda ex: -1, -1, np.mean(p_examples[:,K]))
+
+	if len(attributes) == 0:
+		K = len(examples[0])-1
+		return RegressionDecisionTree(lambda ex: -1, -1, np.mean(examples[:,K]))
+
+	if len(examples) == 1:
+		K = len(examples[0])-1
+		return RegressionDecisionTree(lambda ex: -1, -1, examples[0][K])
 
 	K = len(examples[0])-1
 	labels = examples[:,K]
@@ -231,6 +241,8 @@ def dt_learning(examples, attributes, p_examples, delta):
 		vals.append((S_orig-loss, attr, thresh))
 	vals = sorted(vals, key=lambda x:(-x[0], x[1], x[2]))
 	#pdb.set_trace()
+	# if len(vals) == 0:
+	# 	pdb.set_trace()
 	if vals[0][0] < delta:
 		# don't split
 		# return decision tree, but what are the details here?
@@ -244,18 +256,42 @@ def dt_learning(examples, attributes, p_examples, delta):
 		tree.weights[0] = float(len(idxs)) / len(examples)
 		idxs = [idx[0] for idx in idxs]
 		exs = examples[idxs]
-		tree.branches[0] = dt_learning(0)
+
+		attributes = [val[1] for val in vals]
+		attributes.pop(0)
+		tree.branches[0] = dt_learning(exs, attributes, examples, delta)
 
 		idxs = np.argwhere(examples[:,vals[0][1]] >= vals[0][2])
 		tree.weights[1] = float(len(idxs)) / len(examples)
 		idxs = [idx[0] for idx in idxs]
 		exs = examples[idxs]
-		tree.branches[1] = dt_learning(1)
+		tree.branches[1] = dt_learning(exs, attributes, examples, delta)
 
 	return tree
+
+def simple_test():
+	examples = [[1,0,0,1], 
+				[1,0,1,1],
+				[0,0,1,0],
+				[0,1,0,0],
+				[1,1,1,1],
+				[0,0,0,0]]
+	examples = np.array(examples)
+	attributes = list(range(3))
+	tree = dt_learning(examples, attributes, examples)
+	result = test(tree, [1,0,0])
+	print(result)
+	result = test(tree, [1,0,1])
+	print(result)
+	result = test(tree, [0,0,1])
+	print(result)
+	result = test(tree, [0,1,0])
+	print(result)
+	result = test(tree, [1,1,0])
+	print(result)
 
 if __name__ == "__main__":
 	Xs = gen_data(100,4)
 	attributes = list(range(Xs.shape[1]-1))
-	tree = dt_learning(Xs, attributes, Xs, 0.1)
+	tree = dt_learning(Xs, attributes, Xs, 0.0000000)
 	traverse_tree(tree)
