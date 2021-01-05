@@ -1,6 +1,8 @@
 import numpy as np
 import pdb
+import pandas as pd
 
+np.random.seed(0)
 
 """Implementing a boolean decision tree for pedagogical purposes"""
 
@@ -33,14 +35,16 @@ def test_probabilistic(tree, x):
 
 	return test_probabilistic(tree.branches[output], x)
 
-def traverse_tree(tree):
+def traverse_tree(tree, mapback):
+	# if tree.attr == 5:
+	# 	pdb.set_trace()
 	"""For debugging purposes"""
 	if len(tree.branches) == 0:
 		print("Terminate")
 
-	print("Attribute: ", tree.attr)
+	print("Attribute: ", mapback[tree.attr])
 	for val in tree.branches.keys():
-		traverse_tree(tree.branches[val])
+		traverse_tree(tree.branches[val], mapback)
 
 def plural_value(p_examples):
 	K = len(p_examples[0])-1
@@ -146,14 +150,16 @@ attributes is the set of indices into X in examples
 """
 def dt_learning(examples, attributes, p_examples):
 	if len(examples) == 0:
-		return plural_value(p_examples)
+		val = plural_value(p_examples)
+		return DecisionTree(lambda ex: val, -1, val)
 
 	K = len(examples[0])-1
 	labels = examples[:,K]
 	if len(set(labels)) == 1:
 		return DecisionTree(lambda ex: labels[0], -1, labels[0])
 	elif len(attributes) == 0:
-		return plural_value(examples)
+		val = plural_value(examples)
+		return DecisionTree(lambda ex: val, -1, val)
 	else:
 		importances = [(a,importance(examples, a)) for a in attributes]
 		importances = sorted(importances,key=lambda x:(-x[1],x[0]))
@@ -262,7 +268,125 @@ def simple_test_2():
 	result = test(tree, Xs[0][:K])
 	print(result)
 
+def gen_categorical_data(N):
+	patrons = ["None", "Some", "Full"]
+	wait_time = ["10-30", "30-60", ">60"]
+	hungry = ["No", "Yes"]
+	alternate = ["No", "Yes"]
+	reservation = ["No", "Yes"]
+	weekend = ["No", "Yes"]
+	bar = ["No", "Yes"]
+	raining = ["No", "Yes"]
+	should_wait = ["False", "True"]
+
+	name_map = {
+		"patrons": patrons,
+		"wait_time": wait_time,
+		"hungry": hungry,
+		"alternate": alternate,
+		"reservation": reservation,
+		"weekend": weekend,
+		"bar": bar,
+		"raining": raining,
+		"should_wait": should_wait
+	}
+
+	forseries = {}
+
+	# learn how to use a pandas dataframe here
+	for name in name_map.keys():
+		arr = np.random.choice(name_map[name], N)
+		forseries[name] = arr
+
+	# generate the label
+	arr = []
+	for i in range(N):
+		if forseries["hungry"][i] == "No" and forseries["alternate"][i] == "No" and forseries["raining"][i] == "No":
+			arr.append("True")
+		else:
+			arr.append("False")
+			#arr.append(np.random.choice(name_map["should_wait"]))
+	forseries["should_wait"] = arr
+	df = pd.DataFrame(forseries)
+	#pdb.set_trace()
+
+	# add a label - just do it randomly now
+	return df
+
+def construct_attributes_map(df):
+	K = len(df.columns)
+	attr_map = {}
+	num_attr = 0
+	for i in range(K):
+		name = df.columns[i]
+		vals_list = df[name].unique()
+		if len(vals_list) > 2:
+			num_attr += len(vals_list)
+		else:
+			num_attr += 1
+		vals_map = {val : j for j, val in enumerate(vals_list)}
+		attr_map[name] = vals_map
+	return attr_map, num_attr
+
+def binarize_matrix(df, attr_map, num_attr):
+	N = len(df.index)
+	X = np.zeros(shape=(N,num_attr), dtype=int)
+	# remember to put label into the very last column
+	cur = 0
+	mapback = {}
+	#pdb.set_trace()
+	for name in attr_map.keys():
+		print("Name: ", name)
+		print("Cur: ", cur)
+		print("Attribute map: ", attr_map[name])
+		if len(attr_map[name]) > 2:
+			# look at X
+			print("padding")
+			for i in range(N):
+				val = df[name][i] 
+				col = attr_map[name][val]
+				X[i][cur+col] = 1
+			mapback[cur] = name
+			mapback[cur+1] = name
+			mapback[cur+2] = name
+			cur += 3
+		else:
+			#print(name)
+			for i in range(N):
+				val = df[name][i]
+				X[i][cur] = attr_map[name][val] # does this work
+			mapback[cur] = name
+			cur += 1
+	mapback[-1] = -1
+	#pdb.set_trace()
+	return X, mapback
+
+def generate_plots():
+	pass
+
+def interpret_trees():
+	pass
+
+def run_experiment():
+	df = gen_categorical_data(1000)
+	attr_map, num_attr = construct_attributes_map(df)
+	X, mapback = binarize_matrix(df, attr_map, num_attr)
+	attributes = list(range(num_attr-1))
+	tree = dt_learning(X[:800,:], attributes, X[:800,:])
+	test_vals = X[:800,:]
+	K = test_vals.shape[1]
+	y_preds = []
+	traverse_tree(tree, mapback)
+	for i in range(len(test_vals)):
+		y_preds.append(test(tree,test_vals[i,:K]))
+
+	y_preds = np.array(y_preds)
+	#pdb.set_trace()
+	acc = np.mean(y_preds == test_vals[:,K-1])
+	print(acc)
+
 if __name__ == "__main__":
-	simple_test_3()
-	print("testing probabilistic...")
-	simple_test_4()
+	#simple_test_3()
+	#print("testing probabilistic...")
+	#simple_test_4()
+	run_experiment()
